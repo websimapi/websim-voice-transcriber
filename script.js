@@ -25,14 +25,18 @@ class VoiceTranscriber {
     
     checkBrowserSupport() {
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-            this.showError('Speech recognition not supported in this browser');
-            return;
+            this.showError('Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari.');
+            this.recordBtn.disabled = true;
+            return false;
         }
         
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            this.showError('Media devices not supported in this browser');
-            return;
+            this.showError('Microphone access not supported in this browser');
+            this.recordBtn.disabled = true;
+            return false;
         }
+        
+        return true;
     }
     
     setupEventListeners() {
@@ -41,31 +45,61 @@ class VoiceTranscriber {
     }
     
     setupSpeechRecognition() {
+        if (!this.checkBrowserSupport()) return;
+        
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         this.recognition = new SpeechRecognition();
         
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
+        this.recognition.maxAlternatives = 1;
         
         this.recognition.onstart = () => {
+            console.log('Speech recognition started');
             this.updateStatus('Listening...', true);
         };
         
         this.recognition.onresult = (event) => {
+            console.log('Speech recognition result received');
             this.processResults(event);
         };
         
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            this.showError(`Recognition error: ${event.error}`);
+            let errorMessage = 'Recognition error';
+            
+            switch(event.error) {
+                case 'no-speech':
+                    errorMessage = 'No speech detected. Try speaking louder.';
+                    break;
+                case 'audio-capture':
+                    errorMessage = 'Microphone not accessible. Please check permissions.';
+                    break;
+                case 'not-allowed':
+                    errorMessage = 'Microphone permission denied. Please allow microphone access.';
+                    break;
+                case 'network':
+                    errorMessage = 'Network error. Please check your connection.';
+                    break;
+                default:
+                    errorMessage = `Recognition error: ${event.error}`;
+            }
+            
+            this.showError(errorMessage);
             this.stopRecording();
         };
         
         this.recognition.onend = () => {
+            console.log('Speech recognition ended');
             if (this.isRecording) {
-                // Restart if we're still supposed to be recording
-                this.recognition.start();
+                console.log('Restarting speech recognition');
+                // Small delay before restarting to prevent rapid restarts
+                setTimeout(() => {
+                    if (this.isRecording) {
+                        this.recognition.start();
+                    }
+                }, 100);
             }
         };
     }
@@ -176,17 +210,28 @@ class VoiceTranscriber {
     
     async startRecording() {
         try {
+            // Request microphone permission first
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            
             this.isRecording = true;
             this.recordBtn.classList.add('recording');
             this.recordBtn.querySelector('.btn-text').textContent = 'Stop Recording';
             document.querySelector('.status-dot').classList.add('recording');
             
             await this.setupAudioVisualization();
-            this.recognition.start();
+            
+            // Start speech recognition with error handling
+            try {
+                this.recognition.start();
+                console.log('Starting speech recognition...');
+            } catch (error) {
+                console.error('Error starting speech recognition:', error);
+                throw new Error('Could not start speech recognition');
+            }
             
         } catch (error) {
             console.error('Error starting recording:', error);
-            this.showError('Could not start recording. Please check microphone permissions.');
+            this.showError('Could not start recording. Please check microphone permissions and try again.');
             this.stopRecording();
         }
     }
@@ -227,10 +272,18 @@ class VoiceTranscriber {
     }
     
     showError(message) {
+        console.error('VoiceTranscriber Error:', message);
         this.updateStatus(`Error: ${message}`, false);
+        
+        // Show error in transcript area as well
+        this.transcript.innerHTML = `<div class="error-message" style="color: #ff6b6b; text-align: center; margin-top: 50px;">${message}</div>`;
+        
         setTimeout(() => {
             this.updateStatus('Ready to record', false);
-        }, 3000);
+            if (this.transcript.querySelector('.error-message')) {
+                this.clearTranscript();
+            }
+        }, 5000);
     }
 }
 
@@ -238,4 +291,3 @@ class VoiceTranscriber {
 document.addEventListener('DOMContentLoaded', () => {
     new VoiceTranscriber();
 });
-
