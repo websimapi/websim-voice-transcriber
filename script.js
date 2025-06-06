@@ -57,11 +57,12 @@ class VoiceTranscriber {
         
         this.recognition.onstart = () => {
             console.log('Speech recognition started');
-            this.updateStatus('Listening...', true);
+            this.updateStatus('Listening... Speak now!', true);
         };
         
         this.recognition.onresult = (event) => {
-            console.log('Speech recognition result received');
+            console.log('Speech recognition result received, results length:', event.results.length);
+            console.log('Event resultIndex:', event.resultIndex);
             this.processResults(event);
         };
         
@@ -152,11 +153,13 @@ class VoiceTranscriber {
     }
     
     processResults(event) {
+        console.log('Processing results:', event.results);
         let finalTranscript = '';
         let interimTranscript = '';
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
+            console.log(`Result ${i}: "${transcript}", isFinal: ${event.results[i].isFinal}`);
             
             if (event.results[i].isFinal) {
                 finalTranscript += transcript + ' ';
@@ -165,14 +168,18 @@ class VoiceTranscriber {
             }
         }
         
+        console.log('Final:', finalTranscript, 'Interim:', interimTranscript);
         this.updateTranscript(finalTranscript, interimTranscript);
     }
     
     updateTranscript(finalText, interimText) {
+        console.log('Updating transcript with final:', finalText, 'interim:', interimText);
+        
         // Remove placeholder if it exists
         const placeholder = this.transcript.querySelector('.placeholder');
         if (placeholder) {
             placeholder.remove();
+            console.log('Placeholder removed');
         }
         
         // Add final text to transcript
@@ -181,6 +188,10 @@ class VoiceTranscriber {
             finalSpan.className = 'final-text';
             finalSpan.textContent = finalText;
             this.transcript.appendChild(finalSpan);
+            console.log('Final text added:', finalText);
+            
+            // Add a space or line break after final text
+            this.transcript.appendChild(document.createTextNode(' '));
         }
         
         // Update or add interim text
@@ -192,6 +203,7 @@ class VoiceTranscriber {
                 this.transcript.appendChild(interimSpan);
             }
             interimSpan.textContent = interimText;
+            console.log('Interim text updated:', interimText);
         } else if (interimSpan) {
             interimSpan.remove();
         }
@@ -276,14 +288,14 @@ class VoiceTranscriber {
         this.updateStatus(`Error: ${message}`, false);
         
         // Show error in transcript area as well
-        this.transcript.innerHTML = `<div class="error-message" style="color: #ff6b6b; text-align: center; margin-top: 50px;">${message}</div>`;
+        this.transcript.innerHTML = `<div class="error-message" style="color: #ff6b6b; text-align: center; margin-top: 50px; font-weight: bold;">${message}</div>`;
         
         setTimeout(() => {
             this.updateStatus('Ready to record', false);
             if (this.transcript.querySelector('.error-message')) {
                 this.clearTranscript();
             }
-        }, 5000);
+        }, 8000);
     }
 }
 
